@@ -74,13 +74,12 @@ unsafe fn bind_attribute_to_buffer(program: u32, attribute_name: &str, buffer: u
     gl::VertexAttribPointer(attribute, components, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 }
 
-fn calc_mandelbrot(x_pixels: u32, y_pixels: u32) -> (Vec<GLfloat>, Vec<GLfloat>) {
+fn calc_mandelbrot(x_pixels: u32, y_pixels: u32, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
     println!("Calculating fractal...");
 
     let mut colors    : Vec<GLfloat> = vec![];
     let mut positions : Vec<GLfloat> = vec![];
 
-    let zoom = 1.0 / 5.5;
     let center_x = -0.7;
     let center_y =  0.0;
 
@@ -160,6 +159,7 @@ fn main() {
     let retina = true;
     let retina_factor = if retina { 2 } else { 1 };
 
+    let mut zoom = 1.0 / 5.5;
     let mut x_pixels = x_initial_points * retina_factor;
     let mut y_pixels = y_initial_points * retina_factor;
 
@@ -168,6 +168,7 @@ fn main() {
 
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
+    window.set_scroll_polling(true);
     window.make_current();
 
     gl::load_with(|s| window.get_proc_address(s));
@@ -185,9 +186,6 @@ fn main() {
     let vertex_buffer = create_buffer();
     let color_buffer = create_buffer();
 
-    let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels);
-
-
     unsafe {
         gl::GenVertexArrays(1, &mut vertex_array);
         gl::BindVertexArray(vertex_array);
@@ -200,6 +198,7 @@ fn main() {
 
     }
 
+    let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels, zoom);
     draw_fractal(positions, colors, vertex_buffer, color_buffer, &mut window);
 
     while !window.should_close() {
@@ -215,14 +214,18 @@ fn main() {
                     y_pixels = height as u32;
 
                     needs_redraw = true;
+                }
+                glfw::WindowEvent::Scroll(_x, y) => {
+                    zoom += y * 0.1;
 
+                    needs_redraw = true;
                 }
                 e => { println!("Unhandled event: {:?}", e); }
             }
         }
 
         if needs_redraw {
-            let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels);
+            let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels, zoom);
             draw_fractal(positions, colors, vertex_buffer, color_buffer, &mut window);
         }
     }
