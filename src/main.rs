@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::Read;
 
 use gl::types::*;
-use glfw::{Context, OpenGlProfileHint, WindowHint, WindowMode, Key};
+use glfw::{Context, Key, OpenGlProfileHint, Window, WindowHint, WindowMode};
 
 mod gl_util;
 
@@ -74,45 +74,10 @@ unsafe fn bind_attribute_to_buffer(program: u32, attribute_name: &str, buffer: u
     gl::VertexAttribPointer(attribute, components, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 }
 
-fn main() {
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+fn calc_mandelbrot(x_pixels: u32, y_pixels: u32) -> (Vec<GLfloat>, Vec<GLfloat>) {
+    println!("Calculating fractal...");
 
-    glfw.window_hint(WindowHint::ContextVersion(3, 2));
-    glfw.window_hint(WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfileHint::Core));
-
-    let x_points = 500;
-    let y_points = 300;
-
-    let retina = true;
-    let retina_factor = if retina { 2 } else { 1 };
-
-    let x_pixels = x_points * retina_factor;
-    let y_pixels = y_points * retina_factor;
-
-    let (mut window, events) = glfw.create_window(x_points, y_points, "Mandelbrot", WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.set_key_polling(true);
-    window.make_current();
-
-    gl::load_with(|s| window.get_proc_address(s));
-
-    let vertex_shader   = gl_util::compile_shader(&load_shader("mandel.v.glsl"), gl::VERTEX_SHADER);
-    let fragment_shader = gl_util::compile_shader(&load_shader("mandel.f.glsl"), gl::FRAGMENT_SHADER);
-    let program = gl_util::link_program(vertex_shader, fragment_shader);
-
-    unsafe {
-        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-        gl::Clear(gl::COLOR_BUFFER_BIT);
-    }
-
-    let mut vertex_array = 0;
-    let vertex_buffer = create_buffer();
-    let color_buffer = create_buffer();
-
-    let mut colors : Vec<GLfloat> = vec![];
-
+    let mut colors    : Vec<GLfloat> = vec![];
     let mut positions : Vec<GLfloat> = vec![];
 
     let zoom = 1.0 / 5.5;
@@ -128,7 +93,6 @@ fn main() {
     let world_top     = center_y + world_height / 2.0;
     let _world_bottom = center_y - world_height / 2.0;
 
-    println!("Calculating fractal...");
     let (tx, rx) = channel();
     for y_pixel in 0..y_pixels {
 
@@ -167,7 +131,62 @@ fn main() {
     }
     println!("Done");
 
+    (positions, colors)
+}
+
+fn draw_fractal(positions : Vec<GLfloat>, colors : Vec<GLfloat>, vertex_buffer : GLuint, color_buffer : GLuint, window: &mut Window) {
     let points = colors.len() / 3;
+
+    unsafe {
+        load_vector_in_buffer(vertex_buffer, positions);
+        load_vector_in_buffer(color_buffer, colors);
+
+        gl::DrawArrays(gl::POINTS, 0, points as i32);
+
+        window.swap_buffers();
+    }
+}
+
+fn main() {
+    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+
+    glfw.window_hint(WindowHint::ContextVersion(3, 2));
+    glfw.window_hint(WindowHint::OpenGlForwardCompat(true));
+    glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfileHint::Core));
+
+    let x_initial_points = 500;
+    let y_initial_points = 300;
+
+    let retina = true;
+    let retina_factor = if retina { 2 } else { 1 };
+
+    let mut x_pixels = x_initial_points * retina_factor;
+    let mut y_pixels = y_initial_points * retina_factor;
+
+    let (mut window, events) = glfw.create_window(x_initial_points, y_initial_points, "Mandelbrot", WindowMode::Windowed)
+        .expect("Failed to create GLFW window.");
+
+    window.set_key_polling(true);
+    window.set_framebuffer_size_polling(true);
+    window.make_current();
+
+    gl::load_with(|s| window.get_proc_address(s));
+
+    let vertex_shader   = gl_util::compile_shader(&load_shader("mandel.v.glsl"), gl::VERTEX_SHADER);
+    let fragment_shader = gl_util::compile_shader(&load_shader("mandel.f.glsl"), gl::FRAGMENT_SHADER);
+    let program = gl_util::link_program(vertex_shader, fragment_shader);
+
+    unsafe {
+        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+    }
+
+    let mut vertex_array = 0;
+    let vertex_buffer = create_buffer();
+    let color_buffer = create_buffer();
+
+    let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels);
+
 
     unsafe {
         gl::GenVertexArrays(1, &mut vertex_array);
@@ -176,28 +195,36 @@ fn main() {
         gl::UseProgram(program);
         gl::BindFragDataLocation(program, 0, CString::new("out_color").unwrap().as_ptr());
 
-        load_vector_in_buffer(vertex_buffer, positions);
         bind_attribute_to_buffer(program, "position", vertex_buffer, 2);
-
-        load_vector_in_buffer(color_buffer, colors);
         bind_attribute_to_buffer(program, "color", color_buffer, 3);
 
-        gl::DrawArrays(gl::POINTS, 0, points as i32);
-
-        window.swap_buffers();
     }
 
+    draw_fractal(positions, colors, vertex_buffer, color_buffer, &mut window);
+
     while !window.should_close() {
+        let mut needs_redraw = false;
         glfw.poll_events();
         for (_, event) in glfw::flush_messages(&events) {
             match event {
                 glfw::WindowEvent::Key(Key::Escape, _, _, _) => {
                     window.set_should_close(true)
                 }
-                _ => {}
+                glfw::WindowEvent::FramebufferSize(width, height) => {
+                    x_pixels = width  as u32;
+                    y_pixels = height as u32;
+
+                    needs_redraw = true;
+
+                }
+                e => { println!("Unhandled event: {:?}", e); }
             }
         }
 
+        if needs_redraw {
+            let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels);
+            draw_fractal(positions, colors, vertex_buffer, color_buffer, &mut window);
+        }
     }
 
     unsafe {
