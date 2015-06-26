@@ -81,7 +81,16 @@ fn main() {
     glfw.window_hint(WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfileHint::Core));
 
-    let (mut window, events) = glfw.create_window(800, 600, "Mandelbrot", WindowMode::Windowed)
+    let x_points = 500;
+    let y_points = 300;
+
+    let retina = true;
+    let retina_factor = if retina { 2 } else { 1 };
+
+    let x_pixels = x_points * retina_factor;
+    let y_pixels = y_points * retina_factor;
+
+    let (mut window, events) = glfw.create_window(x_points, y_points, "Mandelbrot", WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.set_key_polling(true);
@@ -106,9 +115,7 @@ fn main() {
 
     let mut positions : Vec<GLfloat> = vec![];
 
-    let x_pixels = 500;
-    let y_pixels = 500;
-    let zoom = 1.0 / 3.5;
+    let zoom = 1.0 / 5.5;
     let center_x = -0.7;
     let center_y =  0.0;
 
@@ -145,15 +152,12 @@ fn main() {
     for _y_pixel in 0..y_pixels {
         let line = rx.recv().unwrap();
 
-        let y = -(line.y as f64) / height * world_height + world_top;
-
         let mut x_pixel = 0;
         for value in line.values {
-            let x = (x_pixel as f64) / width * world_width + world_left;
             x_pixel += 1;
 
-            positions.push(x as GLfloat / 15.0);
-            positions.push(y as GLfloat / 15.0);
+            positions.push(x_pixel as GLfloat / x_pixels as GLfloat);
+            positions.push(line.y  as GLfloat / y_pixels as GLfloat);
 
             let color = value as GLfloat / mandel::DETAIL as GLfloat;
             colors.push(color);
