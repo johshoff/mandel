@@ -106,14 +106,14 @@ fn main() {
 
     let mut positions : Vec<GLfloat> = vec![];
 
-    let x_chars = 500;
-    let y_chars = 500;
+    let x_pixels = 500;
+    let y_pixels = 500;
     let zoom = 1.0 / 3.5;
     let center_x = -0.7;
     let center_y =  0.0;
 
-    let width  = x_chars as f64;
-    let height = y_chars as f64;
+    let width  = x_pixels as f64;
+    let height = y_pixels as f64;
     let world_width   = 1.0 / zoom;
     let world_height  = 1.0 / zoom * height / width;
     let world_left    = center_x - world_width  / 2.0;
@@ -123,34 +123,34 @@ fn main() {
 
     println!("Calculating fractal...");
     let (tx, rx) = channel();
-    for y_char in 0..y_chars {
+    for y_pixel in 0..y_pixels {
 
         let tx = tx.clone();
 
         spawn(move || {
             let mut line = vec![];
-            for x_char in 0..x_chars {
+            for x_pixel in 0..x_pixels {
 
-                let x =  (x_char as f64) / width  * world_width  + world_left;
-                let y = -(y_char as f64) / height * world_height + world_top;
+                let x =  (x_pixel as f64) / width  * world_width  + world_left;
+                let y = -(y_pixel as f64) / height * world_height + world_top;
 
                 let iterations = mandel::calc(x, y);
 
                 line.push(iterations);
             }
-            tx.send(Line { y: y_char, values: line }).unwrap();
+            tx.send(Line { y: y_pixel, values: line }).unwrap();
         });
     }
 
-    for _y_char in 0..y_chars {
+    for _y_pixel in 0..y_pixels {
         let line = rx.recv().unwrap();
 
         let y = -(line.y as f64) / height * world_height + world_top;
 
-        let mut x_char = 0;
+        let mut x_pixel = 0;
         for value in line.values {
-            let x = (x_char as f64) / width * world_width + world_left;
-            x_char += 1;
+            let x = (x_pixel as f64) / width * world_width + world_left;
+            x_pixel += 1;
 
             positions.push(x as GLfloat / 15.0);
             positions.push(y as GLfloat / 15.0);
