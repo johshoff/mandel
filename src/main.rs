@@ -74,8 +74,10 @@ unsafe fn bind_attribute_to_buffer(program: u32, attribute_name: &str, buffer: u
     gl::VertexAttribPointer(attribute, components, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 }
 
+extern crate time;
+
 fn calc_mandelbrot(x_pixels: u32, y_pixels: u32, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
-    println!("Calculating fractal...");
+    let start = time::precise_time_ns();
 
     let mut colors    : Vec<GLfloat> = vec![];
     let mut positions : Vec<GLfloat> = vec![];
@@ -128,7 +130,9 @@ fn calc_mandelbrot(x_pixels: u32, y_pixels: u32, zoom: f64) -> (Vec<GLfloat>, Ve
             colors.push(color);
         }
     }
-    println!("Done");
+
+    let end = time::precise_time_ns();
+    println!("Calculating fractal in {} ms", (end - start) / 1000);
 
     (positions, colors)
 }
