@@ -1,5 +1,6 @@
 extern crate gl;
 extern crate glfw;
+extern crate time;
 
 use std::sync::mpsc::channel;
 use std::thread::spawn;
@@ -8,6 +9,8 @@ use std::ptr;
 use std::ffi::CString;
 use std::fs::File;
 use std::io::Read;
+use std::fmt::{ Display, Formatter };
+use std::fmt;
 
 use gl::types::*;
 use glfw::{Context, Key, OpenGlProfileHint, Window, WindowHint, WindowMode};
@@ -38,6 +41,22 @@ mod mandel {
 struct Line {
     y: u32,
     values: Vec<u32>,
+}
+
+struct HumanTimeDuration {
+    nanoseconds: u64,
+}
+
+impl Display for HumanTimeDuration {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), fmt::Error> {
+        let ns = self.nanoseconds;
+        match ns {
+                        0 ...         1_000 => fmt.write_fmt(format_args!("{} ns", ns)),
+                    1_000 ...     1_000_000 => fmt.write_fmt(format_args!("{:.*} µs", 2, (ns as f64) /         1_000f64)),
+                1_000_000 ... 1_000_000_000 => fmt.write_fmt(format_args!("{:.*} ms", 2, (ns as f64) /     1_000_000f64)),
+                           _                => fmt.write_fmt(format_args!("{:.*} s" , 2, (ns as f64) / 1_000_000_000f64)),
+        }
+    }
 }
 
 // TODO: return result with a useful error type
@@ -73,8 +92,6 @@ unsafe fn bind_attribute_to_buffer(program: u32, attribute_name: &str, buffer: u
     gl::EnableVertexAttribArray(attribute);
     gl::VertexAttribPointer(attribute, components, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 }
-
-extern crate time;
 
 fn calc_mandelbrot(x_pixels: u32, y_pixels: u32, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
     let start = time::precise_time_ns();
@@ -132,7 +149,7 @@ fn calc_mandelbrot(x_pixels: u32, y_pixels: u32, zoom: f64) -> (Vec<GLfloat>, Ve
     }
 
     let end = time::precise_time_ns();
-    println!("Calculating fractal in {} ms", (end - start) / 1000);
+    println!("Calculating fractal in {}", HumanTimeDuration { nanoseconds: end - start });
 
     (positions, colors)
 }
@@ -212,6 +229,11 @@ fn main() {
             match event {
                 glfw::WindowEvent::Key(Key::Escape, _, _, _) => {
                     window.set_should_close(true)
+                }
+                glfw::WindowEvent::Key(Key::R, _, pressed, _) => {
+                    if pressed == glfw::Action::Press {
+                        needs_redraw = true;
+                    }
                 }
                 glfw::WindowEvent::FramebufferSize(width, height) => {
                     x_pixels = width  as u32;
