@@ -39,7 +39,7 @@ mod mandel {
 }
 
 struct Line {
-    y: u32,
+    y: i32,
     values: Vec<u32>,
 }
 
@@ -93,7 +93,7 @@ unsafe fn bind_attribute_to_buffer(program: u32, attribute_name: &str, buffer: u
     gl::VertexAttribPointer(attribute, components, gl::FLOAT, gl::FALSE as GLboolean, 0, ptr::null());
 }
 
-fn calc_mandelbrot(x_pixels: u32, y_pixels: u32, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
+fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
     let start = time::precise_time_ns();
 
     let mut colors    : Vec<GLfloat> = vec![];
@@ -177,15 +177,12 @@ fn main() {
     let x_initial_points = 500;
     let y_initial_points = 300;
 
-    let retina = true;
-    let retina_factor = if retina { 2 } else { 1 };
-
     let mut zoom = 1.0 / 5.5;
-    let mut x_pixels = x_initial_points * retina_factor;
-    let mut y_pixels = y_initial_points * retina_factor;
 
     let (mut window, events) = glfw.create_window(x_initial_points, y_initial_points, "Mandelbrot", WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
+
+    let (mut x_pixels, mut y_pixels) = window.get_framebuffer_size();
 
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
@@ -236,8 +233,8 @@ fn main() {
                     }
                 }
                 glfw::WindowEvent::FramebufferSize(width, height) => {
-                    x_pixels = width  as u32;
-                    y_pixels = height as u32;
+                    x_pixels = width;
+                    y_pixels = height;
 
                     needs_redraw = true;
                 }
