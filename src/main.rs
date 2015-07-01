@@ -104,8 +104,8 @@ fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, zoom: f64) -> (Vec<GLfloat>, Ve
 
     let width  = x_pixels as f64;
     let height = y_pixels as f64;
-    let world_width   = 1.0 / zoom;
-    let world_height  = 1.0 / zoom * height / width;
+    let world_width   = 2f64.powf(zoom);
+    let world_height  = world_width * height / width;
     let world_left    = center_x - world_width  / 2.0;
     let _world_right  = center_x + world_width  / 2.0;
     let world_top     = center_y + world_height / 2.0;
@@ -177,7 +177,7 @@ fn main() {
     let x_initial_points = 500;
     let y_initial_points = 300;
 
-    let mut zoom = 1.0 / 5.5;
+    let mut zoom = 2.0;
 
     let (mut window, events) = glfw.create_window(x_initial_points, y_initial_points, "Mandelbrot", WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
@@ -239,7 +239,7 @@ fn main() {
                     needs_redraw = true;
                 }
                 glfw::WindowEvent::Scroll(_x, y) => {
-                    zoom += y * 0.1;
+                    zoom += y;
 
                     needs_redraw = true;
                 }
