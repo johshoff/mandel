@@ -194,6 +194,9 @@ fn main() {
 
     let (mut x_pixels, mut y_pixels) = window.get_framebuffer_size();
 
+    // on "retina displays" there are two pixels per point, otherwise, it is one
+    let pixel_size = x_pixels / (x_initial_points as i32);
+
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
     window.set_scroll_polling(true);
@@ -269,8 +272,9 @@ fn main() {
 
                     if mouse_button_1_pressed {
                         let world_per_pixel = world_width_from_zoom(zoom) / (x_pixels as f64);
-                        center_x -= (mouse_x - mouse_start_pan_x) * world_per_pixel;
-                        center_y -= (mouse_y - mouse_start_pan_y) * world_per_pixel;
+                        let world_per_point = world_per_pixel * (pixel_size as f64);
+                        center_x -= (mouse_x - mouse_start_pan_x) * world_per_point;
+                        center_y -= (mouse_y - mouse_start_pan_y) * world_per_point;
                         mouse_start_pan_x = mouse_x;
                         mouse_start_pan_y = mouse_y;
 
