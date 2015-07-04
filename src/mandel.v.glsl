@@ -1,4 +1,7 @@
 #version 150
+uniform vec2 world_top_left;
+uniform vec2 world_dimensions;
+
 in vec2 position;
 in vec3 color;
 out vec3 frag_color;
@@ -6,6 +9,9 @@ out vec3 frag_color;
 void main() {
 	frag_color = color;
 
-	gl_Position = vec4(position * 2 - 1, 0.0, 1.0);
+	vec2 world_pos = position;
+	vec2 screen_pos = ((world_pos - world_top_left) / world_dimensions) * vec2(2, -2) - 1;
+
+	gl_Position = vec4(screen_pos, 0.0, 1.0);
 }
 

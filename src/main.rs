@@ -78,7 +78,7 @@ fn create_buffer() -> GLuint {
     }
 }
 
-unsafe fn load_vector_in_buffer(buffer: u32, values: Vec<GLfloat>) {
+unsafe fn load_vector_in_buffer(buffer: u32, values: &Vec<GLfloat>) {
     gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
     gl::BufferData(gl::ARRAY_BUFFER,
                    (values.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
@@ -97,6 +97,23 @@ fn world_width_from_zoom(zoom: f64) -> f64 {
     2f64.powf(zoom)
 }
 
+unsafe fn set_viewport(program: GLuint, zoom: f64, x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64) {
+    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, x_pixels, y_pixels, center_x, center_y);
+    gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_top_left"  ).unwrap().as_ptr()), world_left  as f32, world_top    as f32);
+    gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_dimensions").unwrap().as_ptr()), world_width as f32, world_height as f32);
+}
+
+fn get_screen_in_world(zoom: f64, x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64) -> (f64, f64, f64, f64) {
+    let width  = x_pixels as f64;
+    let height = y_pixels as f64;
+    let world_width   = world_width_from_zoom(zoom);
+    let world_height  = world_width * height / width;
+    let world_left    = center_x - world_width  / 2.0;
+    let world_top     = center_y + world_height / 2.0;
+
+    (world_width, world_height, world_left, world_top)
+}
+
 fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
     let start = time::precise_time_ns();
 
@@ -105,12 +122,8 @@ fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64, z
 
     let width  = x_pixels as f64;
     let height = y_pixels as f64;
-    let world_width   = world_width_from_zoom(zoom);
-    let world_height  = world_width * height / width;
-    let world_left    = center_x - world_width  / 2.0;
-    let _world_right  = center_x + world_width  / 2.0;
-    let world_top     = center_y + world_height / 2.0;
-    let _world_bottom = center_y - world_height / 2.0;
+
+    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, x_pixels, y_pixels, center_x, center_y);
 
     let (tx, rx) = channel();
     for y_pixel in 0..y_pixels {
@@ -138,9 +151,10 @@ fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64, z
         let mut x_pixel = 0;
         for value in line.values {
             x_pixel += 1;
+            let y_pixel = line.y;
 
-            positions.push(x_pixel as GLfloat / x_pixels as GLfloat);
-            positions.push(line.y  as GLfloat / y_pixels as GLfloat);
+            positions.push(( (x_pixel as f64) / width  * world_width  + world_left) as f32);
+            positions.push((-(y_pixel as f64) / height * world_height + world_top ) as f32);
 
             let color = value as GLfloat / mandel::DETAIL as GLfloat;
             colors.push(color);
@@ -155,12 +169,12 @@ fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64, z
     (positions, colors)
 }
 
-fn draw_fractal(positions : Vec<GLfloat>, colors : Vec<GLfloat>, vertex_buffer : GLuint, color_buffer : GLuint, window: &mut Window) {
+fn draw_fractal(positions : &Vec<GLfloat>, colors : &Vec<GLfloat>, vertex_buffer : GLuint, color_buffer : GLuint, window: &mut Window) {
     let points = colors.len() / 3;
 
     unsafe {
-        load_vector_in_buffer(vertex_buffer, positions);
-        load_vector_in_buffer(color_buffer, colors);
+        load_vector_in_buffer(vertex_buffer, &positions);
+        load_vector_in_buffer(color_buffer,  &colors);
 
         gl::DrawArrays(gl::POINTS, 0, points as i32);
 
@@ -228,11 +242,11 @@ fn main() {
 
         bind_attribute_to_buffer(program, "position", vertex_buffer, 2);
         bind_attribute_to_buffer(program, "color", color_buffer, 3);
-
     }
 
-    let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels, center_x, center_y, zoom);
-    draw_fractal(positions, colors, vertex_buffer, color_buffer, &mut window);
+    let (mut positions, mut colors) = calc_mandelbrot(x_pixels, y_pixels, center_x, center_y, zoom);
+    unsafe { set_viewport(program, zoom, x_pixels, y_pixels, center_x, center_y) };
+    draw_fractal(&positions, &colors, vertex_buffer, color_buffer, &mut window);
 
     while !window.should_close() {
         let mut needs_redraw = false;
@@ -244,6 +258,9 @@ fn main() {
                 }
                 glfw::WindowEvent::Key(Key::R, _, pressed, _) => {
                     if pressed == glfw::Action::Press {
+                        let (new_positions, new_colors) = calc_mandelbrot(x_pixels, y_pixels, center_x, center_y, zoom);
+                        positions = new_positions;
+                        colors    = new_colors;
                         needs_redraw = true;
                     }
                 }
@@ -287,8 +304,13 @@ fn main() {
         }
 
         if needs_redraw {
-            let (positions, colors) = calc_mandelbrot(x_pixels, y_pixels, center_x, center_y, zoom);
-            draw_fractal(positions, colors, vertex_buffer, color_buffer, &mut window);
+            unsafe {
+                gl::ClearColor(0.2, 0.1, 0.05, 1.0);
+                gl::Clear(gl::COLOR_BUFFER_BIT);
+            }
+
+            unsafe { set_viewport(program, zoom, x_pixels, y_pixels, center_x, center_y) };
+            draw_fractal(&positions, &colors, vertex_buffer, color_buffer, &mut window);
         }
     }
 
