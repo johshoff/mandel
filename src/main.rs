@@ -38,6 +38,17 @@ mod mandel {
     }
 }
 
+struct Point<T> {
+    x : T,
+    y : T,
+}
+
+impl<T> Point<T> {
+    fn new(x: T, y: T) -> Point<T> {
+        Point { x: x, y: y }
+    }
+}
+
 struct Line {
     y: i32,
     values: Vec<u32>,
@@ -97,38 +108,39 @@ fn world_width_from_zoom(zoom: f64) -> f64 {
     2f64.powf(zoom)
 }
 
-unsafe fn set_viewport(program: GLuint, zoom: f64, x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64) {
-    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, x_pixels, y_pixels, center_x, center_y);
+unsafe fn set_viewport(program: GLuint, zoom: f64, pixels: &Point<i32>, center: &Point<f64>) {
+    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, &pixels, &center);
     gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_top_left"  ).unwrap().as_ptr()), world_left  as f32, world_top    as f32);
     gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_dimensions").unwrap().as_ptr()), world_width as f32, world_height as f32);
 }
 
-fn get_screen_in_world(zoom: f64, x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64) -> (f64, f64, f64, f64) {
-    let width  = x_pixels as f64;
-    let height = y_pixels as f64;
+fn get_screen_in_world(zoom: f64, pixels: &Point<i32>, center: &Point<f64>) -> (f64, f64, f64, f64) {
+    let width  = pixels.x as f64;
+    let height = pixels.y as f64;
     let world_width   = world_width_from_zoom(zoom);
     let world_height  = world_width * height / width;
-    let world_left    = center_x - world_width  / 2.0;
-    let world_top     = center_y + world_height / 2.0;
+    let world_left    = center.x - world_width  / 2.0;
+    let world_top     = center.y + world_height / 2.0;
 
     (world_width, world_height, world_left, world_top)
 }
 
-fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
+fn calc_mandelbrot(pixels: &Point<i32>, center: &Point<f64>, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
     let start = time::precise_time_ns();
 
     let mut colors    : Vec<GLfloat> = vec![];
     let mut positions : Vec<GLfloat> = vec![];
 
-    let width  = x_pixels as f64;
-    let height = y_pixels as f64;
+    let width  = pixels.x as f64;
+    let height = pixels.y as f64;
 
-    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, x_pixels, y_pixels, center_x, center_y);
+    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, &pixels, &center);
 
     let (tx, rx) = channel();
-    for y_pixel in 0..y_pixels {
+    for y_pixel in 0..pixels.y {
 
         let tx = tx.clone();
+        let x_pixels = pixels.x;
 
         spawn(move || {
             let mut line = vec![];
@@ -145,7 +157,7 @@ fn calc_mandelbrot(x_pixels: i32, y_pixels: i32, center_x: f64, center_y: f64, z
         });
     }
 
-    for _y_pixel in 0..y_pixels {
+    for _y_pixel in 0..pixels.y {
         let line = rx.recv().unwrap();
 
         let mut x_pixel = 0;
@@ -193,23 +205,23 @@ fn main() {
     let y_initial_points = 300;
 
     // since mouse button events don't send mouse positions, we need to store them
-    let mut mouse_x = 0f64;
-    let mut mouse_y = 0f64;
-    let mut mouse_start_pan_x = 0f64;
-    let mut mouse_start_pan_y = 0f64;
+    let mut mouse = Point::new(0f64, 0f64);
+    let mut mouse_start_pan = Point::new(0f64, 0f64);
     let mut mouse_button_1_pressed = false;
 
     let mut zoom = 2.0;
-    let mut center_x = -0.7;
-    let mut center_y =  0.0;
+    let mut center = Point::new(-0.7, 0.0);
 
     let (mut window, events) = glfw.create_window(x_initial_points, y_initial_points, "Mandelbrot", WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
-    let (mut x_pixels, mut y_pixels) = window.get_framebuffer_size();
+    let mut pixels = {
+        let (x_pixels, y_pixels) = window.get_framebuffer_size();
+        Point::new(x_pixels, y_pixels)
+    };
 
     // on "retina displays" there are two pixels per point, otherwise, it is one
-    let pixel_size = x_pixels / (x_initial_points as i32);
+    let pixel_size = pixels.x / (x_initial_points as i32);
 
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
@@ -244,8 +256,8 @@ fn main() {
         bind_attribute_to_buffer(program, "color", color_buffer, 3);
     }
 
-    let (mut positions, mut colors) = calc_mandelbrot(x_pixels, y_pixels, center_x, center_y, zoom);
-    unsafe { set_viewport(program, zoom, x_pixels, y_pixels, center_x, center_y) };
+    let (mut positions, mut colors) = calc_mandelbrot(&pixels, &center, zoom);
+    unsafe { set_viewport(program, zoom, &pixels, &center) };
     draw_fractal(&positions, &colors, vertex_buffer, color_buffer, &mut window);
 
     while !window.should_close() {
@@ -258,15 +270,15 @@ fn main() {
                 }
                 glfw::WindowEvent::Key(Key::R, _, pressed, _) => {
                     if pressed == glfw::Action::Press {
-                        let (new_positions, new_colors) = calc_mandelbrot(x_pixels, y_pixels, center_x, center_y, zoom);
+                        let (new_positions, new_colors) = calc_mandelbrot(&pixels, &center, zoom);
                         positions = new_positions;
                         colors    = new_colors;
                         needs_redraw = true;
                     }
                 }
                 glfw::WindowEvent::FramebufferSize(width, height) => {
-                    x_pixels = width;
-                    y_pixels = height;
+                    pixels.x = width;
+                    pixels.y = height;
 
                     needs_redraw = true;
                 }
@@ -277,23 +289,23 @@ fn main() {
                 }
                 glfw::WindowEvent::MouseButton(glfw::MouseButton::Button1, glfw::Action::Press, _) => {
                     mouse_button_1_pressed = true;
-                    mouse_start_pan_x = mouse_x;
-                    mouse_start_pan_y = mouse_y;
+                    mouse_start_pan.x = mouse.x;
+                    mouse_start_pan.y = mouse.y;
                 }
                 glfw::WindowEvent::MouseButton(glfw::MouseButton::Button1, glfw::Action::Release, _) => {
                     mouse_button_1_pressed = false;
                 }
                 glfw::WindowEvent::CursorPos(x, y) => {
-                    mouse_x = x;
-                    mouse_y = y;
+                    mouse.x = x;
+                    mouse.y = y;
 
                     if mouse_button_1_pressed {
-                        let world_per_pixel = world_width_from_zoom(zoom) / (x_pixels as f64);
+                        let world_per_pixel = world_width_from_zoom(zoom) / (pixels.x as f64);
                         let world_per_point = world_per_pixel * (pixel_size as f64);
-                        center_x -= (mouse_x - mouse_start_pan_x) * world_per_point;
-                        center_y -= (mouse_y - mouse_start_pan_y) * world_per_point;
-                        mouse_start_pan_x = mouse_x;
-                        mouse_start_pan_y = mouse_y;
+                        center.x -= (mouse.x - mouse_start_pan.x) * world_per_point;
+                        center.y -= (mouse.y - mouse_start_pan.y) * world_per_point;
+                        mouse_start_pan.x = mouse.x;
+                        mouse_start_pan.y = mouse.y;
 
                         needs_redraw = true;
                     }
@@ -309,7 +321,7 @@ fn main() {
                 gl::Clear(gl::COLOR_BUFFER_BIT);
             }
 
-            unsafe { set_viewport(program, zoom, x_pixels, y_pixels, center_x, center_y) };
+            unsafe { set_viewport(program, zoom, &pixels, &center) };
             draw_fractal(&positions, &colors, vertex_buffer, color_buffer, &mut window);
         }
     }
