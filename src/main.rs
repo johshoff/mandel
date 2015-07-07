@@ -72,7 +72,9 @@ impl Display for HumanTimeDuration {
 
 // TODO: return result with a useful error type
 fn load_shader(filename: &str) -> String {
-    let mut file  = File::open(filename).ok().expect(&format!("Could not open shader file {}", filename));
+    let mut file  = File::open(filename)
+                        .ok().unwrap_or_else(|| File::open("src/".to_string()+filename)
+                                                    .ok().expect(&format!("Could not open shader file {}", filename)));
     let mut bytes = Vec::new();
 
     file.read_to_end(&mut bytes).ok().expect(&format!("Failed to read from shader file {}", filename));

@@ -1,9 +1,8 @@
 Running
 -------
 
-This application expects to find the shaders in the current working directory, so to run, do:
+Run with:
 
-	cd src
 	cargo run
 
 TODO
