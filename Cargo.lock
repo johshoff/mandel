@@ -4,6 +4,7 @@ version = "0.1.0"
 dependencies = [
  "gl 0.0.12 (git+https://github.com/bjz/gl-rs)",
  "glfw 0.1.0 (git+https://github.com/bjz/glfw-rs.git)",
+ "point 0.1.0 (git+https://github.com/johshoff/point.git)",
  "time 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -80,6 +81,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "point"
+version = "0.1.0"
+source = "git+https://github.com/johshoff/point.git#7ca66dd8c062055b460ad14b222df0456f486193"
 
 [[package]]
 name = "semver"

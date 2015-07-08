@@ -9,5 +9,8 @@ git = "https://github.com/bjz/gl-rs"
 [dependencies.glfw]
 git = "https://github.com/bjz/glfw-rs.git"
 
+[dependencies.point]
+git = "https://github.com/johshoff/point.git"
+
 [dependencies]
 time = "0.1"
