@@ -40,6 +40,16 @@ mod mandel {
     }
 }
 
+struct TileSpecification {
+    pixels: Point<i32>,
+    center: Point<f64>,
+    zoom:   f64,
+}
+struct Tile {
+    specification: TileSpecification,
+    colors:        Vec<GLfloat>,
+    positions:     Vec<GLfloat>,
+}
 
 struct Line {
     y: i32,
@@ -170,7 +180,7 @@ fn calc_mandelbrot(pixels: &Point<i32>, center: &Point<f64>, zoom: f64) -> (Vec<
     }
 
     let end = time::precise_time_ns();
-    println!("Calculating fractal in {}", HumanTimeDuration { nanoseconds: end - start });
+    println!("Calculated fractal in {}", HumanTimeDuration { nanoseconds: end - start });
 
     (positions, colors)
 }
@@ -250,9 +260,24 @@ fn main() {
         bind_attribute_to_buffer(program, "color", color_buffer, 3);
     }
 
-    let (mut positions, mut colors) = calc_mandelbrot(&pixels, &center, zoom);
+    let mut current_tile : Option<Tile> = None;
+    let (tx_incoming_order,  rx_incoming_order ) = channel();
+    let (tx_completed_order, rx_completed_order) = channel();
+
+    tx_incoming_order.send(TileSpecification { pixels: pixels, center: center, zoom: zoom }).unwrap();
+
+    spawn(move || {
+        loop {
+            let tile_spec = rx_incoming_order.recv().unwrap();
+            let (positions, colors) = calc_mandelbrot(&tile_spec.pixels, &tile_spec.center, tile_spec.zoom);
+            tx_completed_order.send(Tile { specification: tile_spec, positions: positions, colors: colors }).unwrap();
+        }
+    });
+
     unsafe { set_viewport(program, zoom, &pixels, &center) };
-    draw_fractal(&positions, &colors, vertex_buffer, color_buffer, &mut window);
+
+    let mut needs_new_tile   = false;
+    let mut tile_queue_empty = false;
 
     while !window.should_close() {
         let mut needs_redraw = false;
@@ -261,14 +286,6 @@ fn main() {
             match event {
                 glfw::WindowEvent::Key(Key::Escape, _, _, _) => {
                     window.set_should_close(true)
-                }
-                glfw::WindowEvent::Key(Key::R, _, pressed, _) => {
-                    if pressed == glfw::Action::Press {
-                        let (new_positions, new_colors) = calc_mandelbrot(&pixels, &center, zoom);
-                        positions = new_positions;
-                        colors    = new_colors;
-                        needs_redraw = true;
-                    }
                 }
                 glfw::WindowEvent::FramebufferSize(width, height) => {
                     pixels.x = width;
@@ -313,7 +330,32 @@ fn main() {
             }
 
             unsafe { set_viewport(program, zoom, &pixels, &center) };
-            draw_fractal(&positions, &colors, vertex_buffer, color_buffer, &mut window);
+
+            match current_tile {
+                Some(ref tile) => {
+                    draw_fractal(&tile.positions, &tile.colors, vertex_buffer, color_buffer, &mut window);
+                }
+                None => { /* no tile ready yet */ }
+            }
+
+            needs_new_tile = true;
+        }
+
+        match rx_completed_order.try_recv() {
+            Ok(tile) => {
+                draw_fractal(&tile.positions, &tile.colors, vertex_buffer, color_buffer, &mut window);
+                current_tile = Some(tile);
+                tile_queue_empty = true;
+            },
+            _ => {
+                // TODO: Handle disconnect
+            }
+        }
+
+        if tile_queue_empty && needs_new_tile {
+            tx_incoming_order.send(TileSpecification { pixels: pixels, center: center, zoom: zoom }).unwrap();
+            tile_queue_empty = false;
+            needs_new_tile = false;
         }
     }
 

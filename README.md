@@ -8,7 +8,6 @@ Run with:
 TODO
 ----
 
-- Calculate fractal on a different thread than UI to allow smoother interaction
 - Calculate fractal in cached tiles so that panning and zooming keeps existing
   content and adds in new content as it becomes available
 - Zoom around mouse pointer (keep the point under the mouse pointer the same)
