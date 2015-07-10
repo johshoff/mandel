@@ -113,20 +113,30 @@ fn world_width_from_zoom(zoom: f64) -> f64 {
 }
 
 unsafe fn set_viewport(program: GLuint, zoom: f64, pixels: &Point<i32>, center: &Point<f64>) {
-    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, &pixels, &center);
-    gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_top_left"  ).unwrap().as_ptr()), world_left  as f32, world_top    as f32);
-    gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_dimensions").unwrap().as_ptr()), world_width as f32, world_height as f32);
+    let (world_width, world_height, world_left, world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
+    gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_bottom_left").unwrap().as_ptr()), world_left  as f32, world_bottom as f32);
+    gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_dimensions" ).unwrap().as_ptr()), world_width as f32, world_height as f32);
 }
 
-fn get_screen_in_world(zoom: f64, pixels: &Point<i32>, center: &Point<f64>) -> (f64, f64, f64, f64) {
+fn get_screen_in_world(zoom: f64, pixels: &Point<i32>, center: &Point<f64>) -> (f64, f64, f64, f64, f64) {
     let width  = pixels.x as f64;
     let height = pixels.y as f64;
     let world_width   = world_width_from_zoom(zoom);
     let world_height  = world_width * height / width;
     let world_left    = center.x - world_width  / 2.0;
     let world_top     = center.y + world_height / 2.0;
+    let world_bottom  = center.y - world_height / 2.0;
 
-    (world_width, world_height, world_left, world_top)
+    (world_width, world_height, world_left, world_top, world_bottom)
+}
+
+fn pixel_to_world(pixel_coord: &Point<f64>, zoom: f64, pixels: &Point<i32>, center: &Point<f64>) -> Point<f64> {
+    let (world_width, world_height, world_left, world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
+
+    Point {
+        x:  pixel_coord.x / (pixels.x as f64) * world_width  + world_left,
+        y: -pixel_coord.y / (pixels.y as f64) * world_height + world_top,
+    }
 }
 
 fn calc_mandelbrot(pixels: &Point<i32>, center: &Point<f64>, zoom: f64) -> (Vec<GLfloat>, Vec<GLfloat>) {
@@ -138,7 +148,7 @@ fn calc_mandelbrot(pixels: &Point<i32>, center: &Point<f64>, zoom: f64) -> (Vec<
     let width  = pixels.x as f64;
     let height = pixels.y as f64;
 
-    let (world_width, world_height, world_left, world_top) = get_screen_in_world(zoom, &pixels, &center);
+    let (world_width, world_height, world_left, world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
 
     let (tx, rx) = channel();
     for y_pixel in 0..pixels.y {
@@ -294,7 +304,13 @@ fn main() {
                     needs_redraw = true;
                 }
                 glfw::WindowEvent::Scroll(_x, y) => {
+                    let old_world = pixel_to_world(&mouse, zoom, &pixels, &center);
+
                     zoom += y;
+
+                    let new_world = pixel_to_world(&mouse, zoom, &pixels, &center);
+
+                    center = center + old_world - new_world;
 
                     needs_redraw = true;
                 }
@@ -312,7 +328,9 @@ fn main() {
                     if mouse_button_1_pressed {
                         let world_per_pixel = world_width_from_zoom(zoom) / (pixels.x as f64);
                         let world_per_point = world_per_pixel * (pixel_size as f64);
-                        center = center - (mouse - mouse_start_pan) * world_per_point;
+                        let mut mouse_movement = mouse - mouse_start_pan;
+                        mouse_movement.y = -mouse_movement.y;
+                        center = center - mouse_movement * world_per_point;
                         mouse_start_pan = mouse;
 
                         needs_redraw = true;
