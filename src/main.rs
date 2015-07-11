@@ -125,7 +125,7 @@ fn world_width_from_zoom(zoom: f64) -> f64 {
 }
 
 unsafe fn set_viewport(program: GLuint, zoom: f64, pixels: &Point<i32>, center: &Point<f64>) {
-    let (world_width, world_height, world_left, world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
+    let (world_width, world_height, world_left, _world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
     gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_bottom_left").unwrap().as_ptr()), world_left  as f32, world_bottom as f32);
     gl::Uniform2f(gl::GetUniformLocation(program, CString::new("world_dimensions" ).unwrap().as_ptr()), world_width as f32, world_height as f32);
 }
@@ -143,7 +143,7 @@ fn get_screen_in_world(zoom: f64, pixels: &Point<i32>, center: &Point<f64>) -> (
 }
 
 fn pixel_to_world(pixel_coord: &Point<f64>, zoom: f64, pixels: &Point<i32>, center: &Point<f64>) -> Point<f64> {
-    let (world_width, world_height, world_left, world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
+    let (world_width, world_height, world_left, world_top, _world_bottom) = get_screen_in_world(zoom, &pixels, &center);
 
     Point {
         x:  pixel_coord.x / (pixels.x as f64) * world_width  + world_left,
@@ -160,7 +160,7 @@ fn calc_mandelbrot(pixels: &Point<i32>, center: &Point<f64>, zoom: f64) -> (Vec<
     let width  = pixels.x as f64;
     let height = pixels.y as f64;
 
-    let (world_width, world_height, world_left, world_top, world_bottom) = get_screen_in_world(zoom, &pixels, &center);
+    let (world_width, world_height, world_left, world_top, _world_bottom) = get_screen_in_world(zoom, &pixels, &center);
 
     let (tx, rx) = channel();
     for y_pixel in 0..pixels.y {
