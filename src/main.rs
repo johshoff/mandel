@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::Read;
 use std::fmt::{ Display, Formatter };
 use std::fmt;
+use std::cmp::{Eq, PartialEq};
 
 use gl::types::*;
 use glfw::{Context, Key, OpenGlProfileHint, Window, WindowHint, WindowMode};
@@ -45,6 +46,17 @@ struct TileSpecification {
     center: Point<f64>,
     zoom:   f64,
 }
+
+impl PartialEq for TileSpecification {
+    fn eq(&self, other: &TileSpecification) -> bool {
+        self.pixels.x != other.pixels.x || self.center.x != other.center.x ||
+        self.pixels.y != other.pixels.y || self.center.y != other.center.y ||
+        self.zoom != other.zoom
+    }
+}
+
+impl Eq for TileSpecification {}
+
 struct Tile {
     specification: TileSpecification,
     colors:        Vec<GLfloat>,
@@ -274,20 +286,15 @@ fn main() {
     let (tx_incoming_order,  rx_incoming_order ) = channel();
     let (tx_completed_order, rx_completed_order) = channel();
 
-    tx_incoming_order.send(TileSpecification { pixels: pixels, center: center, zoom: zoom }).unwrap();
-
     spawn(move || {
         loop {
-            let tile_spec = rx_incoming_order.recv().unwrap();
+            let tile_spec : TileSpecification = rx_incoming_order.recv().unwrap();
             let (positions, colors) = calc_mandelbrot(&tile_spec.pixels, &tile_spec.center, tile_spec.zoom);
             tx_completed_order.send(Tile { specification: tile_spec, positions: positions, colors: colors }).unwrap();
         }
     });
 
-    unsafe { set_viewport(program, zoom, &pixels, &center) };
-
-    let mut needs_new_tile   = false;
-    let mut tile_queue_empty = false;
+    let mut tile_queue_empty = true;
 
     while !window.should_close() {
         let mut needs_redraw = false;
@@ -341,6 +348,17 @@ fn main() {
             }
         }
 
+        match rx_completed_order.try_recv() {
+            Ok(tile) => {
+                current_tile = Some(tile);
+                tile_queue_empty = true;
+                needs_redraw = true;
+            },
+            _ => {
+                // TODO: Handle disconnect
+            }
+        }
+
         if needs_redraw {
             unsafe {
                 gl::ClearColor(0.2, 0.1, 0.05, 1.0);
@@ -355,25 +373,20 @@ fn main() {
                 }
                 None => { /* no tile ready yet */ }
             }
-
-            needs_new_tile = true;
         }
 
-        match rx_completed_order.try_recv() {
-            Ok(tile) => {
-                draw_fractal(&tile.positions, &tile.colors, vertex_buffer, color_buffer, &mut window);
-                current_tile = Some(tile);
-                tile_queue_empty = true;
+        let needs_new_tile = match current_tile {
+            None => true,
+            Some(ref tile) => {
+                let new_tile_spec = TileSpecification { pixels: pixels, center: center, zoom: zoom };
+
+                tile.specification == new_tile_spec
             },
-            _ => {
-                // TODO: Handle disconnect
-            }
-        }
+        };
 
         if tile_queue_empty && needs_new_tile {
             tx_incoming_order.send(TileSpecification { pixels: pixels, center: center, zoom: zoom }).unwrap();
             tile_queue_empty = false;
-            needs_new_tile = false;
         }
     }
 
