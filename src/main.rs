@@ -375,17 +375,17 @@ fn main() {
             }
         }
 
+        let new_tile_spec = TileSpecification { pixels: pixels, center: center, zoom: zoom };
+
         let needs_new_tile = match current_tile {
             None => true,
             Some(ref tile) => {
-                let new_tile_spec = TileSpecification { pixels: pixels, center: center, zoom: zoom };
-
                 tile.specification == new_tile_spec
             },
         };
 
         if tile_queue_empty && needs_new_tile {
-            tx_incoming_order.send(TileSpecification { pixels: pixels, center: center, zoom: zoom }).unwrap();
+            tx_incoming_order.send(new_tile_spec).unwrap();
             tile_queue_empty = false;
         }
     }
