@@ -49,9 +49,9 @@ struct TileSpecification {
 
 impl PartialEq for TileSpecification {
     fn eq(&self, other: &TileSpecification) -> bool {
-        self.pixels.x != other.pixels.x || self.center.x != other.center.x ||
-        self.pixels.y != other.pixels.y || self.center.y != other.center.y ||
-        self.zoom != other.zoom
+        self.pixels == other.pixels &&
+        self.center == other.center &&
+        self.zoom == other.zoom
     }
 }
 
@@ -380,7 +380,7 @@ fn main() {
         let needs_new_tile = match current_tile {
             None => true,
             Some(ref tile) => {
-                tile.specification == new_tile_spec
+                tile.specification != new_tile_spec
             },
         };
 
